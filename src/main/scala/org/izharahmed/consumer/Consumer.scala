@@ -8,9 +8,12 @@ import org.izharahmed.zookeeper.ZookeeperHandler
 import org.izharahmed.configuration.{GlobalConfiguration => GC}
 import org.izharahmed.producer.{InputData, Producer}
 
+import scala.reflect.ClassTag
 import scala.util.Try
 
-/**
+case class TransformResult[B](status: Boolean, newOffset: Option[Long], resultRDD: RDD[B])
+
+/** Entry point
   * Created by Izhar Ahmed on 28-Dec-2017
   */
 object Consumer {
@@ -33,13 +36,15 @@ object Consumer {
     val fetchData = consume(chunkSize, sqlContext)
 
     // perform transformation
-    val transformStatus = transform(fetchData, sqlContext)
+    val transformResultOption = transform[InputData](fetchData, sqlContext)
 
     // update offset based on transformation status
-    transformStatus match {
-      case (true, Some(newOffset)) => setOffset(newOffset)
-      case (true, None)            => logger.info("Offset not updated")
-      case (false, _)              => Unit
+    transformResultOption match {
+      case Some(TransformResult(true, Some(offset), rdd)) =>
+        setOffset(offset)
+        writeTransformationRDD(rdd, offset, sqlContext) // writing test data
+      case Some(TransformResult(true, None, _)) => logger.warn("Offset not updated")
+      case None                                 => Unit
     }
 
   }
@@ -63,20 +68,22 @@ object Consumer {
     * @param rdd input rdd
     * @return the status of the transformation and the max timestamp processed
     */
-  def transform(rdd: RDD[InputData], sqlContext: SQLContext): (Boolean, Option[Long]) = {
-    try {
+  def transform[T: ClassTag](rdd: RDD[InputData],
+                             sqlContext: SQLContext): Option[TransformResult[T]] = {
+    val resultRDD = try {
       //some transformations
-      rdd.filter(_.firstName == "test")
+      val transformedRDD = rdd.map(_.asInstanceOf[T])
       val c = rdd.count()
       logger.info(s"Processed $c rows")
+      transformedRDD
     } catch {
       case e: Exception =>
         e.printStackTrace()
-        return (false, None)
+        return None
     }
-
     val newOffset = getMaxTimeStamp(rdd)
-    (true, newOffset)
+
+    Some(TransformResult[T](status = true, newOffset, resultRDD))
   }
 
   /** Returns the zookeeper path where offset is stored
@@ -149,6 +156,27 @@ object Consumer {
     }
 
     chunkSize
+  }
+
+  /** Write the transformation result RDD as CSV in the tes/resources folder
+    *
+    * NOTE: This method is only used for testing purpose and the actual LOAD part
+    * of the result should be handled separately.
+    *
+    * @param rdd Input RDD
+    * @param offset offset value used to create path
+    * @param sqlContext SQL Context
+    */
+  def writeTransformationRDD(rdd: RDD[InputData], offset: Long, sqlContext: SQLContext): Unit = {
+    import sqlContext.implicits._
+
+    rdd
+      .toDF()
+      .coalesce(1)
+      .write
+      .format("com.databricks.spark.csv")
+      .option("header", "true")
+      .save(s"src/test/resources/${GC.jobId}_$offset")
   }
 
 }

@@ -21,3 +21,8 @@ libraryDependencies += "com.databricks" % "spark-csv_2.10" % "1.4.0"
 // zookeeper support
 libraryDependencies += "org.apache.zookeeper" % "zookeeper" % "3.4.6"
 
+// Assembly Setting
+assemblyMergeStrategy in assembly := {
+  case PathList("META-INF", xs@_*) => MergeStrategy.discard
+  case x => MergeStrategy.first
+}
