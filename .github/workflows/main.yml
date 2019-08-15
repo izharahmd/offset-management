@@ -16,5 +16,5 @@ jobs:
         echo Add other actions to build,
         echo test, and deploy your project.
     - name: Compile
-      uses: docker://hseeberger/scala-sbt
+      uses: docker://hseeberger/scala-sbt:8u141-jdk_2.12.3_0.13.16
     - run: sbt compile
