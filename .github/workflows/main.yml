@@ -17,4 +17,4 @@ jobs:
         echo test, and deploy your project.
     - name: Compile
       uses: hseeberger/scala-sbt
-      run: sbt compile
+    - run: sbt compile
