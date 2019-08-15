@@ -6,10 +6,9 @@ jobs:
   build:
 
     runs-on: ubuntu-latest
+    container: hseeberger/scala-sbt:8u141-jdk_2.12.3_0.13.16
     
     steps:
     - uses: actions/checkout@v1
-    - name: Compile
-      uses: docker://hseeberger/scala-sbt:8u141-jdk_2.12.3_0.13.16
     - run: sbt compile
     - run: sbt test
